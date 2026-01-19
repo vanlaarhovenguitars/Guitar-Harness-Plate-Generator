@@ -709,7 +709,177 @@ function exportSTL() {
         return;
     }
 
-    alert('STL export coming soon! For now, use the SVG and extrude in your CAD software.\n\nRecommended settings:\n- Extrude depth: ' + plateThickness.value + 'mm\n- Use SVG import in Fusion 360, Tinkercad, or Blender');
+    if (state.holes.length === 0 && state.fholes.length === 0 && state.tracePoints.length < 3) {
+        alert('Please add at least one hole, F-hole, or trace a cutout before exporting!');
+        return;
+    }
+
+    // Show loading message
+    status.textContent = 'Generating 3D model... This may take a moment.';
+
+    // Use setTimeout to allow UI to update
+    setTimeout(() => {
+        try {
+            const stl = generateSTL();
+            downloadSTL(stl);
+            status.textContent = 'STL exported successfully!';
+        } catch (error) {
+            console.error('STL Export Error:', error);
+            alert('Error generating STL: ' + error.message + '\n\nPlease check the console for details.');
+            status.textContent = 'Error generating STL. See console for details.';
+        }
+    }, 100);
+}
+
+// Generate STL mesh using Three.js and CSG
+function generateSTL() {
+    // Calculate bounding box (same as SVG export)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    state.holes.forEach(hole => {
+        const radius = (hole.diameter / 2) * state.pixelsPerInch;
+        minX = Math.min(minX, hole.x - radius);
+        minY = Math.min(minY, hole.y - radius);
+        maxX = Math.max(maxX, hole.x + radius);
+        maxY = Math.max(maxY, hole.y + radius);
+    });
+
+    state.fholes.forEach(fhole => {
+        const fholeHeight = (fhole.baseHeight / 25.4) * state.pixelsPerInch * fhole.scale;
+        const fholeWidth = fholeHeight * 0.35;
+        minX = Math.min(minX, fhole.x - fholeWidth);
+        minY = Math.min(minY, fhole.y - fholeHeight / 2);
+        maxX = Math.max(maxX, fhole.x + fholeWidth);
+        maxY = Math.max(maxY, fhole.y + fholeHeight / 2);
+    });
+
+    state.tracePoints.forEach(point => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+    });
+
+    if (minX === Infinity) {
+        minX = 0;
+        minY = 0;
+        maxX = canvas.width;
+        maxY = canvas.height;
+    }
+
+    // Add margin
+    const margin = state.pixelsPerInch * 0.5;
+    minX -= margin;
+    minY -= margin;
+    maxX += margin;
+    maxY += margin;
+
+    // Convert to millimeters
+    const plateWidthMM = ((maxX - minX) / state.pixelsPerInch) * 25.4;
+    const plateHeightMM = ((maxY - minY) / state.pixelsPerInch) * 25.4;
+    const plateThicknessMM = parseFloat(plateThickness.value);
+
+    // Create base plate geometry (centered at origin)
+    const plateGeometry = new THREE.BoxGeometry(plateWidthMM, plateHeightMM, plateThicknessMM);
+    const plateMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+    let plateMesh = new THREE.Mesh(plateGeometry, plateMaterial);
+    plateMesh.updateMatrix();
+
+    // CSG operations - subtract holes
+    const evaluator = new window.ThreeBVHCSG.Evaluator();
+
+    // Subtract each circular hole
+    state.holes.forEach(hole => {
+        const holeXMM = ((hole.x - minX) / state.pixelsPerInch) * 25.4 - plateWidthMM / 2;
+        const holeYMM = ((hole.y - minY) / state.pixelsPerInch) * 25.4 - plateHeightMM / 2;
+        const holeDiameterMM = hole.diameter * 25.4;
+        const holeRadiusMM = holeDiameterMM / 2;
+
+        // Create cylinder for hole (taller than plate to ensure clean cut)
+        const holeGeometry = new THREE.CylinderGeometry(
+            holeRadiusMM,
+            holeRadiusMM,
+            plateThicknessMM * 2,
+            32
+        );
+        const holeMesh = new THREE.Mesh(holeGeometry, plateMaterial);
+
+        // Position and rotate (cylinder is vertical by default, we need it horizontal)
+        holeMesh.rotation.x = Math.PI / 2;
+        holeMesh.position.set(holeXMM, holeYMM, 0);
+        holeMesh.updateMatrix();
+
+        // Subtract hole from plate
+        plateMesh = evaluator.evaluate(plateMesh, holeMesh, window.ThreeBVHCSG.SUBTRACTION);
+    });
+
+    // Subtract F-holes (simplified as ellipses for now)
+    state.fholes.forEach(fhole => {
+        const fholeXMM = ((fhole.x - minX) / state.pixelsPerInch) * 25.4 - plateWidthMM / 2;
+        const fholeYMM = ((fhole.y - minY) / state.pixelsPerInch) * 25.4 - plateHeightMM / 2;
+
+        // Approximate F-hole as stretched ellipse
+        const fholeHeightMM = fhole.baseHeight * fhole.scale;
+        const fholeWidthMM = fholeHeightMM * 0.2;
+
+        // Create ellipse using scaled sphere
+        const fholeGeometry = new THREE.SphereGeometry(1, 32, 16);
+        const fholeMesh = new THREE.Mesh(fholeGeometry, plateMaterial);
+
+        // Scale to create ellipse
+        fholeMesh.scale.set(fholeWidthMM, fholeHeightMM / 2, plateThicknessMM * 2);
+        fholeMesh.position.set(fholeXMM, fholeYMM, 0);
+        fholeMesh.updateMatrix();
+
+        // Subtract from plate
+        plateMesh = evaluator.evaluate(plateMesh, fholeMesh, window.ThreeBVHCSG.SUBTRACTION);
+    });
+
+    // Convert to STL format
+    const geometry = plateMesh.geometry;
+    const vertices = geometry.attributes.position.array;
+
+    let stlString = 'solid plate\n';
+
+    // Process triangles
+    for (let i = 0; i < vertices.length; i += 9) {
+        const v1 = new THREE.Vector3(vertices[i], vertices[i + 1], vertices[i + 2]);
+        const v2 = new THREE.Vector3(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
+        const v3 = new THREE.Vector3(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
+
+        // Calculate normal
+        const cb = new THREE.Vector3();
+        const ab = new THREE.Vector3();
+        cb.subVectors(v3, v2);
+        ab.subVectors(v1, v2);
+        cb.cross(ab);
+        cb.normalize();
+
+        stlString += `  facet normal ${cb.x} ${cb.y} ${cb.z}\n`;
+        stlString += '    outer loop\n';
+        stlString += `      vertex ${v1.x} ${v1.y} ${v1.z}\n`;
+        stlString += `      vertex ${v2.x} ${v2.y} ${v2.z}\n`;
+        stlString += `      vertex ${v3.x} ${v3.y} ${v3.z}\n`;
+        stlString += '    endloop\n';
+        stlString += '  endfacet\n';
+    }
+
+    stlString += 'endsolid plate\n';
+
+    return stlString;
+}
+
+// Download STL file
+function downloadSTL(stlString) {
+    const blob = new Blob([stlString], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `harness-plate-${Date.now()}.stl`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    alert('STL file exported successfully!\n\nYou can now import this into:\n- Tinkercad\n- Fusion 360\n- PrusaSlicer\n- Cura\n- Blender\n\nPlate thickness: ' + plateThickness.value + 'mm');
 }
 
 // Send to Google Spreadsheet
