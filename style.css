@@ -250,10 +250,6 @@ select:focus, input:focus {
     margin-bottom: 1rem;
 }
 
-.mode-selector .mode-btn:last-child {
-    grid-column: 1 / -1;
-}
-
 .mode-btn {
     background: var(--bg-dark);
     border: 1px solid var(--border);

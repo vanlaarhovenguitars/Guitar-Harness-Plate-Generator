@@ -2,12 +2,16 @@
 const state = {
     image: null,
     holes: [],
+    fholes: [],
     tracePoints: [],
     rulerPoints: [],
     pixelsPerInch: null,
     rulerUnit: 'inch',
     mode: 'hole',
     currentComponent: 'pot-cts-500k',
+    currentFholeStyle: 'gibson-335',
+    currentFholeSide: 'left',
+    fholeScale: 100,
     zoom: 1.0,
     offsetX: 0,
     offsetY: 0
@@ -28,6 +32,35 @@ const componentSpecs = {
     'custom': { diameter: 0.375, name: 'Custom Hole' }
 };
 
+// F-hole path definitions (normalized to ~3 inches tall, centered at origin)
+// These are SVG path commands that will be scaled and positioned
+const fholeShapes = {
+    'gibson-335': {
+        name: 'Gibson ES-335',
+        // Classic Gibson semi-hollow F-hole shape
+        path: 'M 0,-38 C 8,-38 12,-35 12,-28 C 12,-20 8,-18 8,-12 L 8,12 C 8,18 12,20 12,28 C 12,35 8,38 0,38 C -8,38 -12,35 -12,28 C -12,20 -8,18 -8,12 L -8,-12 C -8,-18 -12,-20 -12,-28 C -12,-35 -8,-38 0,-38 Z M 0,-42 C 3,-42 5,-44 5,-47 C 5,-50 3,-52 0,-52 C -3,-52 -5,-50 -5,-47 C -5,-44 -3,-42 0,-42 Z M 0,42 C 3,42 5,44 5,47 C 5,50 3,52 0,52 C -3,52 -5,50 -5,47 C -5,44 -3,42 0,42 Z',
+        baseHeight: 104 // mm (total height of shape)
+    },
+    'gretsch': {
+        name: 'Gretsch',
+        // Wider, more decorative Gretsch style
+        path: 'M 0,-40 C 10,-40 15,-36 15,-28 C 15,-18 10,-16 10,-10 L 10,10 C 10,16 15,18 15,28 C 15,36 10,40 0,40 C -10,40 -15,36 -15,28 C -15,18 -10,16 -10,10 L -10,-10 C -10,-16 -15,-18 -15,-28 C -15,-36 -10,-40 0,-40 Z M 0,-44 C 4,-44 7,-47 7,-51 C 7,-55 4,-58 0,-58 C -4,-58 -7,-55 -7,-51 C -7,-47 -4,-44 0,-44 Z M 0,44 C 4,44 7,47 7,51 C 7,55 4,58 0,58 C -4,58 -7,55 -7,51 C -7,47 -4,44 0,44 Z',
+        baseHeight: 116
+    },
+    'violin': {
+        name: 'Classical Violin',
+        // Traditional violin F-hole
+        path: 'M 0,-45 C 6,-45 10,-42 10,-36 C 10,-28 6,-25 6,-18 L 6,18 C 6,25 10,28 10,36 C 10,42 6,45 0,45 C -6,45 -10,42 -10,36 C -10,28 -6,25 -6,18 L -6,-18 C -6,-25 -10,-28 -10,-36 C -10,-42 -6,-45 0,-45 Z M 0,-48 C 2,-48 4,-50 4,-53 C 4,-56 2,-58 0,-58 C -2,-58 -4,-56 -4,-53 C -4,-50 -2,-48 0,-48 Z M 0,48 C 2,48 4,50 4,53 C 4,56 2,58 0,58 C -2,58 -4,56 -4,53 C -4,50 -2,48 0,48 Z',
+        baseHeight: 116
+    },
+    'modern': {
+        name: 'Modern/Slim',
+        // Sleek modern design
+        path: 'M 0,-35 C 6,-35 9,-32 9,-26 C 9,-19 6,-17 6,-10 L 6,10 C 6,17 9,19 9,26 C 9,32 6,35 0,35 C -6,35 -9,32 -9,26 C -9,19 -6,17 -6,10 L -6,-10 C -6,-17 -9,-19 -9,-26 C -9,-32 -6,-35 0,-35 Z M 0,-38 C 2,-38 4,-40 4,-43 C 4,-46 2,-48 0,-48 C -2,-48 -4,-46 -4,-43 C -4,-40 -2,-38 0,-38 Z M 0,38 C 2,38 4,40 4,43 C 4,46 2,48 0,48 C -2,48 -4,46 -4,43 C -4,40 -2,38 0,38 Z',
+        baseHeight: 96
+    }
+};
+
 // DOM elements
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -46,11 +79,30 @@ const rulerDistance = document.getElementById('rulerDistance');
 const setRulerScale = document.getElementById('setRulerScale');
 const rulerUnit = document.getElementById('rulerUnit');
 const unitLabel = document.getElementById('unitLabel');
+const fholeGroup = document.getElementById('fholeGroup');
+const fholeSideGroup = document.getElementById('fholeSideGroup');
+const fholeScaleGroup = document.getElementById('fholeScaleGroup');
+const fholeStyle = document.getElementById('fholeStyle');
+const fholeSide = document.getElementById('fholeSide');
+const fholeScale = document.getElementById('fholeScale');
 
 // Event listeners
 imageUpload.addEventListener('change', handleImageUpload);
 componentType.addEventListener('change', handleComponentChange);
 canvas.addEventListener('click', handleCanvasClick);
+
+// F-hole controls
+fholeStyle.addEventListener('change', (e) => {
+    state.currentFholeStyle = e.target.value;
+});
+
+fholeSide.addEventListener('change', (e) => {
+    state.currentFholeSide = e.target.value;
+});
+
+fholeScale.addEventListener('input', (e) => {
+    state.fholeScale = parseFloat(e.target.value);
+});
 
 // Ruler unit change
 rulerUnit.addEventListener('change', (e) => {
@@ -70,6 +122,18 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
         state.mode = e.target.dataset.mode;
+
+        // Show/hide F-hole controls
+        if (state.mode === 'fhole') {
+            fholeGroup.style.display = 'block';
+            fholeSideGroup.style.display = 'block';
+            fholeScaleGroup.style.display = 'block';
+        } else {
+            fholeGroup.style.display = 'none';
+            fholeSideGroup.style.display = 'none';
+            fholeScaleGroup.style.display = 'none';
+        }
+
         updateStatus();
     });
 });
@@ -106,8 +170,9 @@ setRulerScale.addEventListener('click', () => {
 document.getElementById('sendToSheet').addEventListener('click', sendToSpreadsheet);
 
 document.getElementById('clearAll').addEventListener('click', () => {
-    if (confirm('Clear all holes and traced cutouts?')) {
+    if (confirm('Clear all holes, F-holes, and traced cutouts?')) {
         state.holes = [];
+        state.fholes = [];
         state.tracePoints = [];
         updateHoleList();
         drawCanvas();
@@ -216,20 +281,35 @@ function handleCanvasClick(e) {
 
     // Erase mode
     if (state.mode === 'erase') {
-        const eraseRadius = 20 / state.zoom;
-        let foundHole = false;
+        const eraseRadius = 30 / state.zoom;
+        let found = false;
 
+        // Check holes
         for (let i = state.holes.length - 1; i >= 0; i--) {
             const hole = state.holes[i];
             const dist = Math.sqrt((hole.x - x) ** 2 + (hole.y - y) ** 2);
             if (dist < eraseRadius) {
                 state.holes.splice(i, 1);
-                foundHole = true;
+                found = true;
                 break;
             }
         }
 
-        if (!foundHole) {
+        // Check F-holes
+        if (!found) {
+            for (let i = state.fholes.length - 1; i >= 0; i--) {
+                const fhole = state.fholes[i];
+                const dist = Math.sqrt((fhole.x - x) ** 2 + (fhole.y - y) ** 2);
+                if (dist < eraseRadius * 2) { // Larger radius for F-holes
+                    state.fholes.splice(i, 1);
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        // Check trace points
+        if (!found) {
             for (let i = state.tracePoints.length - 1; i >= 0; i--) {
                 const point = state.tracePoints[i];
                 const dist = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
@@ -260,6 +340,25 @@ function handleCanvasClick(e) {
             diameter,
             component: state.currentComponent,
             name
+        });
+
+        updateHoleList();
+        drawCanvas();
+    }
+
+    // F-hole placement mode
+    if (state.mode === 'fhole') {
+        const fholeData = fholeShapes[state.currentFholeStyle];
+        const scale = (state.fholeScale / 100);
+
+        state.fholes.push({
+            x, y,
+            style: state.currentFholeStyle,
+            side: state.currentFholeSide,
+            scale: scale,
+            path: fholeData.path,
+            baseHeight: fholeData.baseHeight,
+            name: `${fholeData.name} (${state.currentFholeSide})`
         });
 
         updateHoleList();
@@ -322,6 +421,39 @@ function drawCanvas() {
         ctx.fillStyle = 'rgba(255, 107, 53, 0.3)';
     });
 
+    // Draw F-holes
+    state.fholes.forEach((fhole, i) => {
+        ctx.save();
+
+        // Translate to F-hole position
+        ctx.translate(fhole.x, fhole.y);
+
+        // Mirror for left/right
+        if (fhole.side === 'right') {
+            ctx.scale(-1, 1);
+        }
+
+        // Scale based on pixels per inch and user scale setting
+        const pixelScale = state.pixelsPerInch ? (state.pixelsPerInch / 25.4) * fhole.scale : fhole.scale;
+        ctx.scale(pixelScale, pixelScale);
+
+        // Draw F-hole outline
+        ctx.strokeStyle = '#ff6b35';
+        ctx.fillStyle = 'rgba(255, 107, 53, 0.2)';
+        ctx.lineWidth = 3 / pixelScale;
+
+        const path = new Path2D(fhole.path);
+        ctx.fill(path);
+        ctx.stroke(path);
+
+        // Add label
+        ctx.restore();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText(`F${i + 1}`, fhole.x, fhole.y + 5);
+    });
+
     // Draw trace points
     if (state.tracePoints.length > 0) {
         ctx.strokeStyle = '#fbbf24';
@@ -354,22 +486,43 @@ function drawCanvas() {
 // Update hole list
 function updateHoleList() {
     holeList.innerHTML = '';
-    holeCount.textContent = state.holes.length;
+    const totalComponents = state.holes.length + state.fholes.length;
+    holeCount.textContent = totalComponents;
 
+    let itemIndex = 1;
+
+    // Add holes
     state.holes.forEach((hole, i) => {
         const li = document.createElement('li');
         li.className = 'hole-item';
         li.innerHTML = `
-            <span>${i + 1}. ${hole.name} (${hole.diameter}")</span>
-            <button class="delete" onclick="deleteHole(${i})">✕</button>
+            <span>${itemIndex}. ${hole.name} (${hole.diameter}")</span>
+            <button class="delete" onclick="deleteItem('hole', ${i})">✕</button>
         `;
         holeList.appendChild(li);
+        itemIndex++;
+    });
+
+    // Add F-holes
+    state.fholes.forEach((fhole, i) => {
+        const li = document.createElement('li');
+        li.className = 'hole-item';
+        li.innerHTML = `
+            <span>${itemIndex}. ${fhole.name} (${Math.round(fhole.scale * 100)}%)</span>
+            <button class="delete" onclick="deleteItem('fhole', ${i})">✕</button>
+        `;
+        holeList.appendChild(li);
+        itemIndex++;
     });
 }
 
-// Delete hole
-function deleteHole(index) {
-    state.holes.splice(index, 1);
+// Delete item (hole or fhole)
+function deleteItem(type, index) {
+    if (type === 'hole') {
+        state.holes.splice(index, 1);
+    } else if (type === 'fhole') {
+        state.fholes.splice(index, 1);
+    }
     updateHoleList();
     drawCanvas();
 }
@@ -384,10 +537,12 @@ function updateStatus() {
         status.textContent = 'Enter distance between ruler points and click "Set Scale"';
     } else if (state.mode === 'hole') {
         status.textContent = 'Click to place holes. Select component type first.';
+    } else if (state.mode === 'fhole') {
+        status.textContent = 'Click to place F-hole. Choose style and side first.';
     } else if (state.mode === 'trace') {
         status.textContent = 'Click to trace cutout outline. Add multiple points.';
     } else if (state.mode === 'erase') {
-        status.textContent = 'Click near a hole or trace point to remove it.';
+        status.textContent = 'Click near a hole, F-hole, or trace point to remove it.';
     }
 }
 
@@ -398,8 +553,8 @@ function exportSVG() {
         return;
     }
 
-    if (state.holes.length === 0 && state.tracePoints.length < 3) {
-        alert('Please add at least one hole or trace a cutout before exporting!');
+    if (state.holes.length === 0 && state.fholes.length === 0 && state.tracePoints.length < 3) {
+        alert('Please add at least one hole, F-hole, or trace a cutout before exporting!');
         return;
     }
 
@@ -413,6 +568,16 @@ function exportSVG() {
         minY = Math.min(minY, hole.y - radius);
         maxX = Math.max(maxX, hole.x + radius);
         maxY = Math.max(maxY, hole.y + radius);
+    });
+
+    // Include F-holes in bounding box
+    state.fholes.forEach(fhole => {
+        const fholeHeight = (fhole.baseHeight / 25.4) * state.pixelsPerInch * fhole.scale;
+        const fholeWidth = fholeHeight * 0.35; // Approximate width ratio
+        minX = Math.min(minX, fhole.x - fholeWidth);
+        minY = Math.min(minY, fhole.y - fholeHeight / 2);
+        maxX = Math.max(maxX, fhole.x + fholeWidth);
+        maxY = Math.max(maxY, fhole.y + fholeHeight / 2);
     });
 
     // Include trace points in bounding box
@@ -480,6 +645,30 @@ function exportSVG() {
 
     svg += `    </g>\n`;
 
+    // Add F-holes
+    if (state.fholes.length > 0) {
+        svg += `\n    <!-- F-Hole Cutouts -->\n`;
+        svg += `    <g id="fholes">\n`;
+
+        state.fholes.forEach((fhole) => {
+            const fholeX = ((fhole.x - minX) / state.pixelsPerInch) * 25.4;
+            const fholeY = ((fhole.y - minY) / state.pixelsPerInch) * 25.4;
+
+            // Calculate scale in mm
+            const mmScale = fhole.scale;
+
+            // Create transform string
+            let transform = `translate(${fholeX.toFixed(3)},${fholeY.toFixed(3)}) scale(${mmScale.toFixed(3)})`;
+            if (fhole.side === 'right') {
+                transform += ' scale(-1,1)';
+            }
+
+            svg += `        <path d="${fhole.path}" transform="${transform}" class="hole-cutout"/>\n`;
+        });
+
+        svg += `    </g>\n`;
+    }
+
     // Add traced cutout if exists
     if (state.tracePoints.length > 2) {
         svg += `
@@ -510,7 +699,7 @@ function exportSVG() {
     a.click();
     URL.revokeObjectURL(url);
 
-    alert(`SVG exported successfully!\n\nPlate dimensions: ${plateWidthMM.toFixed(2)}mm × ${plateHeightMM.toFixed(2)}mm (${plateWidthInches.toFixed(2)}" × ${plateHeightInches.toFixed(2)}")\nHoles: ${state.holes.length}\nCutouts: ${state.tracePoints.length > 2 ? '1 traced path' : 'none'}\n\nOptimized for Tinkercad, Fusion 360, and other CAD software.`);
+    alert(`SVG exported successfully!\n\nPlate dimensions: ${plateWidthMM.toFixed(2)}mm × ${plateHeightMM.toFixed(2)}mm (${plateWidthInches.toFixed(2)}" × ${plateHeightInches.toFixed(2)}")\nHoles: ${state.holes.length}\nF-holes: ${state.fholes.length}\nTraced Cutouts: ${state.tracePoints.length > 2 ? '1 path' : 'none'}\n\nOptimized for Tinkercad, Fusion 360, and other CAD software.`);
 }
 
 // Export STL
@@ -580,8 +769,8 @@ Paste this into your spreadsheet or configure the Google Apps Script URL to auto
     }
 }
 
-// Make deleteHole available globally
-window.deleteHole = deleteHole;
+// Make deleteItem available globally
+window.deleteItem = deleteItem;
 
 // Initialize
 updateStatus();
