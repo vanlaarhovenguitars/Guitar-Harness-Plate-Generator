@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guitar Harness Plate Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Guitar Harness Plate Generator</h1>
+            <p>Design custom control plates for guitar electronics</p>
+        </header>
+
+        <div class="main-content">
+            <div class="controls-panel">
+                <h2>Plate Configuration</h2>
+
+                <div class="control-group">
+                    <label for="plateWidth">Plate Width (mm):</label>
+                    <input type="number" id="plateWidth" value="80" min="20" max="200" step="1">
+                    <span class="value-display">80mm</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="plateHeight">Plate Height (mm):</label>
+                    <input type="number" id="plateHeight" value="120" min="20" max="200" step="1">
+                    <span class="value-display">120mm</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="plateThickness">Plate Thickness (mm):</label>
+                    <input type="number" id="plateThickness" value="2" min="1" max="5" step="0.5">
+                    <span class="value-display">2mm</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="cornerRadius">Corner Radius (mm):</label>
+                    <input type="number" id="cornerRadius" value="5" min="0" max="20" step="1">
+                    <span class="value-display">5mm</span>
+                </div>
+
+                <h3>Mounting Holes</h3>
+
+                <div class="control-group">
+                    <label for="mountHoles">Number of Mounting Holes:</label>
+                    <select id="mountHoles">
+                        <option value="0">None</option>
+                        <option value="2">2 holes</option>
+                        <option value="4" selected>4 holes</option>
+                        <option value="6">6 holes</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="mountHoleDiameter">Mounting Hole Diameter (mm):</label>
+                    <input type="number" id="mountHoleDiameter" value="3" min="2" max="10" step="0.5">
+                    <span class="value-display">3mm</span>
+                </div>
+
+                <h3>Control Holes</h3>
+
+                <div class="control-group">
+                    <label for="potHoles">Potentiometer Holes:</label>
+                    <input type="number" id="potHoles" value="2" min="0" max="4" step="1">
+                    <span class="value-display">2</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="potDiameter">Pot Hole Diameter (mm):</label>
+                    <input type="number" id="potDiameter" value="8" min="6" max="12" step="0.5">
+                    <span class="value-display">8mm</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="switchHoles">Switch Holes:</label>
+                    <input type="number" id="switchHoles" value="1" min="0" max="3" step="1">
+                    <span class="value-display">1</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="switchDiameter">Switch Hole Diameter (mm):</label>
+                    <input type="number" id="switchDiameter" value="6" min="4" max="12" step="0.5">
+                    <span class="value-display">6mm</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="jackHole">
+                        <input type="checkbox" id="jackHole" checked>
+                        Output Jack Hole
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label for="jackDiameter">Jack Hole Diameter (mm):</label>
+                    <input type="number" id="jackDiameter" value="10" min="6" max="15" step="0.5">
+                    <span class="value-display">10mm</span>
+                </div>
+
+                <div class="button-group">
+                    <button id="exportSVG" class="btn btn-primary">Export SVG</button>
+                    <button id="exportPDF" class="btn btn-secondary">Export PDF</button>
+                    <button id="resetDefaults" class="btn btn-secondary">Reset to Defaults</button>
+                </div>
+            </div>
+
+            <div class="preview-panel">
+                <h2>Live Preview</h2>
+                <div class="canvas-container">
+                    <canvas id="previewCanvas" width="800" height="600"></canvas>
+                </div>
+                <div class="dimensions-info">
+                    <p>All measurements shown are in millimeters (mm)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
