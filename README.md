@@ -36,7 +36,7 @@ The tool features a modern dark UI with real-time preview, intuitive controls, a
 - **🗑️ Erase Mode**: Click to remove holes or trace points
 - **💾 Export Options**:
   - Download SVG files for CNC/laser cutting
-  - STL export (coming soon)
+  - **3D STL export** for 3D printing and CAD
   - Send to print queue with customer info
 - **🌙 Professional Dark UI**: Modern interface with orange accents
 
@@ -117,9 +117,12 @@ No installation required! Just click the link above and start designing your cus
 - **1:1**: View at 100% scale
 
 ### Step 6: Export
-- **Download SVG**: Get a scalable vector file with accurate dimensions
+- **Download SVG**: Get a 2D vector file with accurate dimensions for CNC/laser cutting
+- **Download STL (3D)**: Get a 3D model ready for:
+  - 3D printing (PrusaSlicer, Cura)
+  - CAD software (Fusion 360, Tinkercad, Blender)
+  - CNC milling with proper depth
 - **Send to Print Queue**: Copy design data to clipboard with customer info
-- Use the SVG for CNC routing, laser cutting, or as a drilling template
 
 ## 🎯 Design Specifications
 
@@ -178,18 +181,23 @@ Professional guitar electronics and custom guitar building
 
 ## 🛣️ Roadmap
 
+Recently completed:
+- [x] 🎨 **Preset F-hole shapes** (Gibson ES-335, Gretsch, Violin, Modern)
+- [x] 📏 **Metric ruler support** (mm and inches)
+- [x] 📦 **3D STL export** with CSG hole subtraction
+
 Upcoming features and enhancements:
 
 - [ ] 📄 **DXF export format** for AutoCAD compatibility
 - [ ] 🎸 **Pre-made templates** (Les Paul, Stratocaster, Telecaster styles)
 - [ ] 🎭 **Pickup cavity routing** patterns
-- [ ] 📏 **Imperial units** (inches) support
 - [ ] 🏷️ **Advanced dimension annotations** on export
 - [ ] 🎲 **3D preview mode** for realistic visualization
 - [ ] 💾 **Save/Load projects** functionality
 - [ ] 🎨 **Custom hole positioning** with drag-and-drop
 - [ ] 📊 **Material calculator** for cost estimation
 - [ ] 🔄 **Batch export** for multiple designs
+- [ ] 🔧 **Improved F-hole STL** (proper path extrusion instead of ellipse approximation)
 
 Want to contribute? Feel free to pick one and submit a PR!
 
