@@ -1,398 +1,497 @@
-// Get canvas and context
-const canvas = document.getElementById('previewCanvas');
+// State management
+const state = {
+    image: null,
+    holes: [],
+    tracePoints: [],
+    rulerPoints: [],
+    pixelsPerInch: null,
+    mode: 'hole',
+    currentComponent: 'pot-cts-500k',
+    zoom: 1.0,
+    offsetX: 0,
+    offsetY: 0
+};
+
+// Component specifications (diameter in inches)
+const componentSpecs = {
+    'pot-cts-500k': { diameter: 0.375, name: 'CTS 500K Pot' },
+    'pot-cts-250k': { diameter: 0.375, name: 'CTS 250K Pot' },
+    'pot-pushpull': { diameter: 0.375, name: 'Push-Pull Pot' },
+    'pot-mini': { diameter: 0.25, name: 'Mini Pot' },
+    'toggle-3way': { diameter: 0.375, name: '3-Way Toggle' },
+    'toggle-mini': { diameter: 0.25, name: 'Mini Toggle' },
+    'switch-5way': { diameter: 0.5, name: '5-Way Switch' },
+    'jack-mono': { diameter: 0.375, name: 'Switchcraft Mono' },
+    'jack-stereo': { diameter: 0.375, name: 'Switchcraft Stereo' },
+    'jack-barrel': { diameter: 0.5, name: 'Barrel Jack' },
+    'custom': { diameter: 0.375, name: 'Custom Hole' }
+};
+
+// DOM elements
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const imageUpload = document.getElementById('imageUpload');
+const componentType = document.getElementById('componentType');
+const customDiameterGroup = document.getElementById('customDiameterGroup');
+const customDiameter = document.getElementById('customDiameter');
+const holeList = document.getElementById('holeList');
+const holeCount = document.getElementById('holeCount');
+const status = document.getElementById('status');
+const rulerSection = document.getElementById('rulerSection');
+const rulerPoints = document.getElementById('rulerPoints');
+const plateThickness = document.getElementById('plateThickness');
+const rulerDistanceGroup = document.getElementById('rulerDistanceGroup');
+const rulerDistance = document.getElementById('rulerDistance');
+const setRulerScale = document.getElementById('setRulerScale');
 
-// Scale factor for display (pixels per mm)
-const SCALE = 4;
+// Event listeners
+imageUpload.addEventListener('change', handleImageUpload);
+componentType.addEventListener('change', handleComponentChange);
+canvas.addEventListener('click', handleCanvasClick);
 
-// Get all input elements
-const inputs = {
-    plateWidth: document.getElementById('plateWidth'),
-    plateHeight: document.getElementById('plateHeight'),
-    plateThickness: document.getElementById('plateThickness'),
-    cornerRadius: document.getElementById('cornerRadius'),
-    mountHoles: document.getElementById('mountHoles'),
-    mountHoleDiameter: document.getElementById('mountHoleDiameter'),
-    potHoles: document.getElementById('potHoles'),
-    potDiameter: document.getElementById('potDiameter'),
-    switchHoles: document.getElementById('switchHoles'),
-    switchDiameter: document.getElementById('switchDiameter'),
-    jackHole: document.getElementById('jackHole'),
-    jackDiameter: document.getElementById('jackDiameter')
-};
-
-// Default values
-const defaults = {
-    plateWidth: 80,
-    plateHeight: 120,
-    plateThickness: 2,
-    cornerRadius: 5,
-    mountHoles: 4,
-    mountHoleDiameter: 3,
-    potHoles: 2,
-    potDiameter: 8,
-    switchHoles: 1,
-    switchDiameter: 6,
-    jackHole: true,
-    jackDiameter: 10
-};
-
-// Initialize
-function init() {
-    // Add event listeners to all inputs
-    Object.keys(inputs).forEach(key => {
-        const input = inputs[key];
-        if (input.type === 'checkbox') {
-            input.addEventListener('change', updatePreview);
-        } else {
-            input.addEventListener('input', (e) => {
-                updateValueDisplay(e.target);
-                updatePreview();
-            });
-        }
-        updateValueDisplay(input);
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        state.mode = e.target.dataset.mode;
+        updateStatus();
     });
+});
 
-    // Button event listeners
-    document.getElementById('exportSVG').addEventListener('click', exportSVG);
-    document.getElementById('exportPDF').addEventListener('click', exportPDF);
-    document.getElementById('resetDefaults').addEventListener('click', resetToDefaults);
+document.getElementById('resetRuler').addEventListener('click', () => {
+    state.rulerPoints = [];
+    state.pixelsPerInch = null;
+    rulerDistanceGroup.style.display = 'none';
+    rulerPoints.textContent = '0/2';
+    drawCanvas();
+    updateStatus();
+});
 
-    // Initial draw
-    updatePreview();
+setRulerScale.addEventListener('click', () => {
+    if (state.rulerPoints.length === 2) {
+        const dx = state.rulerPoints[1].x - state.rulerPoints[0].x;
+        const dy = state.rulerPoints[1].y - state.rulerPoints[0].y;
+        const distancePixels = Math.sqrt(dx * dx + dy * dy);
+        const distanceInches = parseFloat(rulerDistance.value);
+        state.pixelsPerInch = distancePixels / distanceInches;
+        status.textContent = `✓ Ruler calibrated! (${state.pixelsPerInch.toFixed(2)} px/inch, ${distanceInches}" scale)`;
+    }
+});
+
+document.getElementById('sendToSheet').addEventListener('click', sendToSpreadsheet);
+
+document.getElementById('clearAll').addEventListener('click', () => {
+    if (confirm('Clear all holes and traced cutouts?')) {
+        state.holes = [];
+        state.tracePoints = [];
+        updateHoleList();
+        drawCanvas();
+    }
+});
+
+document.getElementById('exportSVG').addEventListener('click', exportSVG);
+document.getElementById('exportSTL').addEventListener('click', exportSTL);
+
+// Zoom controls
+document.getElementById('zoomIn').addEventListener('click', () => {
+    state.zoom = Math.min(state.zoom * 1.2, 5);
+    resizeCanvas();
+});
+
+document.getElementById('zoomOut').addEventListener('click', () => {
+    state.zoom = Math.max(state.zoom / 1.2, 0.1);
+    resizeCanvas();
+});
+
+document.getElementById('zoomFit').addEventListener('click', () => {
+    fitToScreen();
+});
+
+document.getElementById('zoom100').addEventListener('click', () => {
+    state.zoom = 1.0;
+    resizeCanvas();
+});
+
+// Handle image upload
+function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            state.image = img;
+            canvas.width = img.width;
+            canvas.height = img.height;
+            fitToScreen();
+            rulerSection.style.display = 'block';
+            updateStatus();
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
 }
 
-// Update value displays
-function updateValueDisplay(input) {
-    const valueDisplay = input.parentElement.querySelector('.value-display');
-    if (valueDisplay && input.type !== 'checkbox') {
-        let value = input.value;
-        if (input.type === 'number') {
-            value += 'mm';
-        }
-        if (input.id === 'potHoles' || input.id === 'switchHoles') {
-            value = input.value;
-        }
-        valueDisplay.textContent = value;
+// Fit image to screen
+function fitToScreen() {
+    if (!state.image) return;
+
+    const container = document.querySelector('.canvas-container');
+    const maxWidth = container.clientWidth - 40;
+    const maxHeight = container.clientHeight - 100;
+
+    const scaleX = maxWidth / state.image.width;
+    const scaleY = maxHeight / state.image.height;
+
+    state.zoom = Math.min(scaleX, scaleY, 1);
+    resizeCanvas();
+}
+
+// Resize canvas based on zoom
+function resizeCanvas() {
+    if (!state.image) return;
+
+    canvas.style.width = (state.image.width * state.zoom) + 'px';
+    canvas.style.height = (state.image.height * state.zoom) + 'px';
+    drawCanvas();
+}
+
+// Handle component type change
+function handleComponentChange() {
+    state.currentComponent = componentType.value;
+    if (componentType.value === 'custom') {
+        customDiameterGroup.style.display = 'block';
+    } else {
+        customDiameterGroup.style.display = 'none';
     }
 }
 
-// Get current configuration
-function getConfig() {
-    return {
-        plateWidth: parseFloat(inputs.plateWidth.value),
-        plateHeight: parseFloat(inputs.plateHeight.value),
-        plateThickness: parseFloat(inputs.plateThickness.value),
-        cornerRadius: parseFloat(inputs.cornerRadius.value),
-        mountHoles: parseInt(inputs.mountHoles.value),
-        mountHoleDiameter: parseFloat(inputs.mountHoleDiameter.value),
-        potHoles: parseInt(inputs.potHoles.value),
-        potDiameter: parseFloat(inputs.potDiameter.value),
-        switchHoles: parseInt(inputs.switchHoles.value),
-        switchDiameter: parseFloat(inputs.switchDiameter.value),
-        jackHole: inputs.jackHole.checked,
-        jackDiameter: parseFloat(inputs.jackDiameter.value)
-    };
+// Handle canvas clicks
+function handleCanvasClick(e) {
+    if (!state.image) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / state.zoom;
+    const y = (e.clientY - rect.top) / state.zoom;
+
+    // Ruler calibration mode
+    if (state.rulerPoints.length < 2) {
+        state.rulerPoints.push({ x, y });
+        rulerPoints.textContent = `${state.rulerPoints.length}/2`;
+
+        if (state.rulerPoints.length === 2) {
+            rulerDistanceGroup.style.display = 'block';
+            status.textContent = 'Enter the distance between the two points, then click "Set Scale"';
+        }
+
+        drawCanvas();
+        return;
+    }
+
+    // Erase mode
+    if (state.mode === 'erase') {
+        const eraseRadius = 20 / state.zoom;
+        let foundHole = false;
+
+        for (let i = state.holes.length - 1; i >= 0; i--) {
+            const hole = state.holes[i];
+            const dist = Math.sqrt((hole.x - x) ** 2 + (hole.y - y) ** 2);
+            if (dist < eraseRadius) {
+                state.holes.splice(i, 1);
+                foundHole = true;
+                break;
+            }
+        }
+
+        if (!foundHole) {
+            for (let i = state.tracePoints.length - 1; i >= 0; i--) {
+                const point = state.tracePoints[i];
+                const dist = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
+                if (dist < eraseRadius) {
+                    state.tracePoints.splice(i, 1);
+                    break;
+                }
+            }
+        }
+
+        updateHoleList();
+        drawCanvas();
+        return;
+    }
+
+    // Hole placement mode
+    if (state.mode === 'hole') {
+        const diameter = componentType.value === 'custom'
+            ? parseFloat(customDiameter.value)
+            : componentSpecs[state.currentComponent].diameter;
+
+        const name = componentType.value === 'custom'
+            ? `Custom ${diameter}"`
+            : componentSpecs[state.currentComponent].name;
+
+        state.holes.push({
+            x, y,
+            diameter,
+            component: state.currentComponent,
+            name
+        });
+
+        updateHoleList();
+        drawCanvas();
+    }
+
+    // Trace mode
+    if (state.mode === 'trace') {
+        state.tracePoints.push({ x, y });
+        drawCanvas();
+    }
 }
 
-// Draw rounded rectangle
-function drawRoundedRect(x, y, width, height, radius) {
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.arcTo(x + width, y, x + width, y + radius, radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
-    ctx.lineTo(x + radius, y + height);
-    ctx.arcTo(x, y + height, x, y + height - radius, radius);
-    ctx.lineTo(x, y + radius);
-    ctx.arcTo(x, y, x + radius, y, radius);
-    ctx.closePath();
-}
-
-// Draw circle with center mark
-function drawHole(x, y, diameter) {
-    const radius = (diameter * SCALE) / 2;
-
-    // Draw hole
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Draw center cross
-    const crossSize = 5;
-    ctx.beginPath();
-    ctx.moveTo(x - crossSize, y);
-    ctx.lineTo(x + crossSize, y);
-    ctx.moveTo(x, y - crossSize);
-    ctx.lineTo(x, y + crossSize);
-    ctx.strokeStyle = '#999';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Draw dimension
-    ctx.fillStyle = '#667eea';
-    ctx.font = 'bold 12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(`⌀${diameter}mm`, x, y + radius + 15);
-}
-
-// Update preview
-function updatePreview() {
-    const config = getConfig();
-
-    // Clear canvas
+// Draw canvas
+function drawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate dimensions
-    const plateWidth = config.plateWidth * SCALE;
-    const plateHeight = config.plateHeight * SCALE;
-    const cornerRadius = config.cornerRadius * SCALE;
+    if (state.image) {
+        ctx.drawImage(state.image, 0, 0);
+    }
 
-    // Center the plate on canvas
-    const offsetX = (canvas.width - plateWidth) / 2;
-    const offsetY = (canvas.height - plateHeight) / 2;
+    // Draw ruler points
+    ctx.fillStyle = '#4ade80';
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2;
 
-    // Draw plate background
-    ctx.save();
-    ctx.translate(offsetX, offsetY);
+    state.rulerPoints.forEach((point, i) => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+        ctx.fill();
 
-    // Draw plate with rounded corners
-    drawRoundedRect(0, 0, plateWidth, plateHeight, cornerRadius);
-    ctx.fillStyle = '#e8e8e8';
-    ctx.fill();
-    ctx.strokeStyle = '#333';
+        if (i > 0) {
+            ctx.beginPath();
+            ctx.moveTo(state.rulerPoints[0].x, state.rulerPoints[0].y);
+            ctx.lineTo(point.x, point.y);
+            ctx.stroke();
+        }
+    });
+
+    // Draw holes
+    ctx.strokeStyle = '#ff6b35';
+    ctx.fillStyle = 'rgba(255, 107, 53, 0.3)';
     ctx.lineWidth = 3;
-    ctx.stroke();
 
-    // Draw dimension lines
-    drawDimensions(config, plateWidth, plateHeight);
+    state.holes.forEach((hole, i) => {
+        const radiusPixels = state.pixelsPerInch
+            ? (hole.diameter / 2) * state.pixelsPerInch
+            : 20;
 
-    // Draw mounting holes
-    if (config.mountHoles > 0) {
-        drawMountingHoles(config, plateWidth, plateHeight);
+        ctx.beginPath();
+        ctx.arc(hole.x, hole.y, radiusPixels, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fill();
+
+        // Label
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${i + 1}`, hole.x, hole.y + 5);
+        ctx.fillStyle = 'rgba(255, 107, 53, 0.3)';
+    });
+
+    // Draw trace points
+    if (state.tracePoints.length > 0) {
+        ctx.strokeStyle = '#fbbf24';
+        ctx.fillStyle = '#fbbf24';
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.moveTo(state.tracePoints[0].x, state.tracePoints[0].y);
+
+        state.tracePoints.forEach((point, i) => {
+            if (i > 0) {
+                ctx.lineTo(point.x, point.y);
+            }
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        if (state.tracePoints.length > 2) {
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.5)';
+            ctx.beginPath();
+            ctx.moveTo(state.tracePoints[0].x, state.tracePoints[0].y);
+            state.tracePoints.forEach(point => ctx.lineTo(point.x, point.y));
+            ctx.closePath();
+            ctx.stroke();
+        }
     }
-
-    // Draw potentiometer holes
-    if (config.potHoles > 0) {
-        drawPotHoles(config, plateWidth, plateHeight);
-    }
-
-    // Draw switch holes
-    if (config.switchHoles > 0) {
-        drawSwitchHoles(config, plateWidth, plateHeight);
-    }
-
-    // Draw jack hole
-    if (config.jackHole) {
-        drawJackHole(config, plateWidth, plateHeight);
-    }
-
-    ctx.restore();
 }
 
-// Draw dimensions
-function drawDimensions(config, plateWidth, plateHeight) {
-    ctx.fillStyle = '#333';
-    ctx.font = 'bold 14px Arial';
-    ctx.textAlign = 'center';
+// Update hole list
+function updateHoleList() {
+    holeList.innerHTML = '';
+    holeCount.textContent = state.holes.length;
 
-    // Width dimension
-    ctx.fillText(`${config.plateWidth}mm`, plateWidth / 2, -10);
-
-    // Height dimension
-    ctx.save();
-    ctx.translate(-10, plateHeight / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(`${config.plateHeight}mm`, 0, 0);
-    ctx.restore();
-}
-
-// Draw mounting holes in corners
-function drawMountingHoles(config, plateWidth, plateHeight) {
-    const margin = 10 * SCALE; // 10mm from edge
-    const positions = [];
-
-    if (config.mountHoles >= 2) {
-        positions.push([margin, margin]); // Top-left
-        positions.push([plateWidth - margin, margin]); // Top-right
-    }
-    if (config.mountHoles >= 4) {
-        positions.push([margin, plateHeight - margin]); // Bottom-left
-        positions.push([plateWidth - margin, plateHeight - margin]); // Bottom-right
-    }
-    if (config.mountHoles === 6) {
-        positions.push([plateWidth / 2, margin]); // Top-center
-        positions.push([plateWidth / 2, plateHeight - margin]); // Bottom-center
-    }
-
-    positions.forEach(([x, y]) => {
-        drawHole(x, y, config.mountHoleDiameter);
+    state.holes.forEach((hole, i) => {
+        const li = document.createElement('li');
+        li.className = 'hole-item';
+        li.innerHTML = `
+            <span>${i + 1}. ${hole.name} (${hole.diameter}")</span>
+            <button class="delete" onclick="deleteHole(${i})">✕</button>
+        `;
+        holeList.appendChild(li);
     });
 }
 
-// Draw potentiometer holes
-function drawPotHoles(config, plateWidth, plateHeight) {
-    const spacing = plateWidth / (config.potHoles + 1);
-    const yPos = plateHeight * 0.35;
+// Delete hole
+function deleteHole(index) {
+    state.holes.splice(index, 1);
+    updateHoleList();
+    drawCanvas();
+}
 
-    for (let i = 1; i <= config.potHoles; i++) {
-        const xPos = spacing * i;
-        drawHole(xPos, yPos, config.potDiameter);
-
-        // Label
-        ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`POT ${i}`, xPos, yPos - (config.potDiameter * SCALE) / 2 - 20);
+// Update status
+function updateStatus() {
+    if (!state.image) {
+        status.textContent = 'Ready. Upload an image to begin.';
+    } else if (state.rulerPoints.length < 2) {
+        status.textContent = `Ruler calibration: Click ${2 - state.rulerPoints.length} more point(s)`;
+    } else if (!state.pixelsPerInch) {
+        status.textContent = 'Enter distance between ruler points and click "Set Scale"';
+    } else if (state.mode === 'hole') {
+        status.textContent = 'Click to place holes. Select component type first.';
+    } else if (state.mode === 'trace') {
+        status.textContent = 'Click to trace cutout outline. Add multiple points.';
+    } else if (state.mode === 'erase') {
+        status.textContent = 'Click near a hole or trace point to remove it.';
     }
 }
 
-// Draw switch holes
-function drawSwitchHoles(config, plateWidth, plateHeight) {
-    const spacing = plateWidth / (config.switchHoles + 1);
-    const yPos = plateHeight * 0.6;
-
-    for (let i = 1; i <= config.switchHoles; i++) {
-        const xPos = spacing * i;
-        drawHole(xPos, yPos, config.switchDiameter);
-
-        // Label
-        ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`SWITCH ${i}`, xPos, yPos - (config.switchDiameter * SCALE) / 2 - 20);
-    }
-}
-
-// Draw output jack hole
-function drawJackHole(config, plateWidth, plateHeight) {
-    const xPos = plateWidth / 2;
-    const yPos = plateHeight * 0.85;
-
-    drawHole(xPos, yPos, config.jackDiameter);
-
-    // Label
-    ctx.fillStyle = '#333';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('OUTPUT JACK', xPos, yPos - (config.jackDiameter * SCALE) / 2 - 20);
-}
-
-// Export to SVG
+// Export SVG
 function exportSVG() {
-    const config = getConfig();
+    if (!state.pixelsPerInch) {
+        alert('Please calibrate the ruler first!');
+        return;
+    }
+
+    const width = canvas.width / state.pixelsPerInch;
+    const height = canvas.height / state.pixelsPerInch;
 
     let svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${config.plateWidth}mm" height="${config.plateHeight}mm" viewBox="0 0 ${config.plateWidth} ${config.plateHeight}">
-  <!-- Generated by Guitar Harness Plate Generator -->
-  <desc>Guitar harness plate: ${config.plateWidth}mm x ${config.plateHeight}mm</desc>
+<svg width="${width}in" height="${height}in" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+    <desc>Guitar Harness Plate - Generated by VL Guitar Repair</desc>
 
-  <!-- Plate outline -->
-  <rect x="0" y="0" width="${config.plateWidth}" height="${config.plateHeight}"
-        rx="${config.cornerRadius}" ry="${config.cornerRadius}"
-        fill="none" stroke="black" stroke-width="0.5"/>
-
+    <!-- Holes -->
+    <g id="holes">
 `;
 
-    // Add mounting holes
-    if (config.mountHoles > 0) {
-        const margin = 10;
-        const positions = [];
+    state.holes.forEach((hole, i) => {
+        const cx = hole.x / state.pixelsPerInch;
+        const cy = hole.y / state.pixelsPerInch;
+        const r = hole.diameter / 2;
 
-        if (config.mountHoles >= 2) {
-            positions.push([margin, margin]);
-            positions.push([config.plateWidth - margin, margin]);
-        }
-        if (config.mountHoles >= 4) {
-            positions.push([margin, config.plateHeight - margin]);
-            positions.push([config.plateWidth - margin, config.plateHeight - margin]);
-        }
-        if (config.mountHoles === 6) {
-            positions.push([config.plateWidth / 2, margin]);
-            positions.push([config.plateWidth / 2, config.plateHeight - margin]);
-        }
+        svg += `        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="black" stroke-width="0.01"/>\n`;
+        svg += `        <text x="${cx}" y="${cy}" text-anchor="middle" font-size="0.1" fill="blue">${i + 1}: ${hole.name}</text>\n`;
+    });
 
-        positions.forEach(([x, y]) => {
-            svg += `  <circle cx="${x}" cy="${y}" r="${config.mountHoleDiameter / 2}" fill="none" stroke="black" stroke-width="0.3"/>\n`;
+    svg += `    </g>\n`;
+
+    // Traced cutout
+    if (state.tracePoints.length > 2) {
+        svg += `    <!-- Traced Cutout -->\n`;
+        svg += `    <g id="cutout">\n`;
+        svg += `        <path d="M `;
+
+        state.tracePoints.forEach((point, i) => {
+            const x = point.x / state.pixelsPerInch;
+            const y = point.y / state.pixelsPerInch;
+            svg += i === 0 ? `${x},${y} ` : `L ${x},${y} `;
         });
+
+        svg += `Z" fill="none" stroke="red" stroke-width="0.02"/>\n`;
+        svg += `    </g>\n`;
     }
 
-    // Add pot holes
-    if (config.potHoles > 0) {
-        const spacing = config.plateWidth / (config.potHoles + 1);
-        const yPos = config.plateHeight * 0.35;
+    svg += `</svg>`;
 
-        for (let i = 1; i <= config.potHoles; i++) {
-            const xPos = spacing * i;
-            svg += `  <circle cx="${xPos}" cy="${yPos}" r="${config.potDiameter / 2}" fill="none" stroke="black" stroke-width="0.3"/>\n`;
-        }
-    }
-
-    // Add switch holes
-    if (config.switchHoles > 0) {
-        const spacing = config.plateWidth / (config.switchHoles + 1);
-        const yPos = config.plateHeight * 0.6;
-
-        for (let i = 1; i <= config.switchHoles; i++) {
-            const xPos = spacing * i;
-            svg += `  <circle cx="${xPos}" cy="${yPos}" r="${config.switchDiameter / 2}" fill="none" stroke="black" stroke-width="0.3"/>\n`;
-        }
-    }
-
-    // Add jack hole
-    if (config.jackHole) {
-        const xPos = config.plateWidth / 2;
-        const yPos = config.plateHeight * 0.85;
-        svg += `  <circle cx="${xPos}" cy="${yPos}" r="${config.jackDiameter / 2}" fill="none" stroke="black" stroke-width="0.3"/>\n`;
-    }
-
-    svg += '</svg>';
-
-    // Download file
-    downloadFile(svg, 'guitar-harness-plate.svg', 'image/svg+xml');
-    alert('SVG file exported successfully!');
-}
-
-// Export to PDF (simplified - creates a data URL)
-function exportPDF() {
-    alert('PDF export: For now, you can print the preview to PDF using your browser\'s print function (Ctrl+P or Cmd+P), or export as SVG and convert it using an online tool.');
-}
-
-// Download file helper
-function downloadFile(content, filename, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
+    // Download
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'harness-plate.svg';
+    a.click();
     URL.revokeObjectURL(url);
 }
 
-// Reset to defaults
-function resetToDefaults() {
-    Object.keys(defaults).forEach(key => {
-        const input = inputs[key];
-        if (input.type === 'checkbox') {
-            input.checked = defaults[key];
-        } else {
-            input.value = defaults[key];
-        }
-        updateValueDisplay(input);
-    });
-    updatePreview();
+// Export STL
+function exportSTL() {
+    if (!state.pixelsPerInch) {
+        alert('Please calibrate the ruler first!');
+        return;
+    }
+
+    alert('STL export coming soon! For now, use the SVG and extrude in your CAD software.\n\nRecommended settings:\n- Extrude depth: ' + plateThickness.value + 'mm\n- Use SVG import in Fusion 360, Tinkercad, or Blender');
 }
 
-// Initialize when DOM is loaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
+// Send to Google Spreadsheet
+async function sendToSpreadsheet() {
+    if (!state.pixelsPerInch) {
+        alert('Please calibrate the ruler first!');
+        return;
+    }
+
+    if (state.holes.length === 0) {
+        alert('Please add at least one hole!');
+        return;
+    }
+
+    const customerName = prompt('Customer Name:');
+    if (!customerName) return;
+
+    const customerEmail = prompt('Customer Email (optional):');
+    const notes = prompt('Additional Notes (optional):');
+
+    const plateData = {
+        timestamp: new Date().toISOString(),
+        customerName,
+        customerEmail: customerEmail || '',
+        notes: notes || '',
+        plateThickness: plateThickness.value + 'mm',
+        scale: `${state.pixelsPerInch.toFixed(2)} px/inch`,
+        imageWidth: (canvas.width / state.pixelsPerInch).toFixed(2) + '"',
+        imageHeight: (canvas.height / state.pixelsPerInch).toFixed(2) + '"',
+        holes: state.holes.map((hole, i) => ({
+            number: i + 1,
+            component: hole.name,
+            diameter: hole.diameter + '"',
+            x: (hole.x / state.pixelsPerInch).toFixed(3) + '"',
+            y: (hole.y / state.pixelsPerInch).toFixed(3) + '"'
+        })),
+        tracePoints: state.tracePoints.length,
+        hasTracedCutout: state.tracePoints.length > 2
+    };
+
+    try {
+        const jsonString = JSON.stringify(plateData, null, 2);
+        await navigator.clipboard.writeText(jsonString);
+
+        alert(`Data copied to clipboard!
+
+Customer: ${customerName}
+Holes: ${state.holes.length}
+Traced Cutout: ${plateData.hasTracedCutout ? 'Yes' : 'No'}
+
+Paste this into your spreadsheet or configure the Google Apps Script URL to auto-send.`);
+
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error sending to print queue. Data has been logged to console.');
+        console.log('Print Queue Data:', plateData);
+    }
 }
+
+// Make deleteHole available globally
+window.deleteHole = deleteHole;
+
+// Initialize
+updateStatus();

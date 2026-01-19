@@ -3,120 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guitar Harness Plate Generator</title>
+    <title>Guitar Harness Plate Generator | VL Guitar Repair</title>
+    <meta name="description" content="Professional guitar harness plate generator with photo upload and ruler calibration">
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Work+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>Guitar Harness Plate Generator</h1>
-            <p>Design custom control plates for guitar electronics</p>
+            <p class="subtitle">VL Guitar Repair | LoothTool.com</p>
         </header>
 
-        <div class="main-content">
-            <div class="controls-panel">
-                <h2>Plate Configuration</h2>
+        <div class="workspace">
+            <!-- Left Panel: Upload & Tools -->
+            <div class="panel">
+                <h2>Setup</h2>
+                <label for="imageUpload" class="file-upload-label">
+                    📸 Upload Photo<br>
+                    <span style="font-size: 0.85rem; opacity: 0.7;">(with ruler for scale)</span>
+                </label>
+                <input type="file" id="imageUpload" accept="image/*">
 
-                <div class="control-group">
-                    <label for="plateWidth">Plate Width (mm):</label>
-                    <input type="number" id="plateWidth" value="80" min="20" max="200" step="1">
-                    <span class="value-display">80mm</span>
+                <div class="ruler-calibration" id="rulerSection" style="display: none;">
+                    <p><strong>Ruler Calibration</strong></p>
+                    <p>Click two points on the ruler, then enter the distance</p>
+                    <div class="tool-group">
+                        <label>Points marked: <span id="rulerPoints">0/2</span></label>
+                    </div>
+                    <div class="tool-group" id="rulerDistanceGroup" style="display: none;">
+                        <label>Distance between points (inches)</label>
+                        <input type="number" id="rulerDistance" step="0.125" value="1.0" min="0.125" max="24">
+                        <button class="btn" id="setRulerScale" style="margin-top: 0.5rem;">Set Scale</button>
+                    </div>
+                    <button class="btn btn-secondary" id="resetRuler">Reset Ruler</button>
                 </div>
 
-                <div class="control-group">
-                    <label for="plateHeight">Plate Height (mm):</label>
-                    <input type="number" id="plateHeight" value="120" min="20" max="200" step="1">
-                    <span class="value-display">120mm</span>
+                <h2 style="margin-top: 2rem;">Mode</h2>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="hole">Add Holes</button>
+                    <button class="mode-btn" data-mode="trace">Trace Cutout</button>
+                    <button class="mode-btn" data-mode="erase">Erase</button>
                 </div>
 
-                <div class="control-group">
-                    <label for="plateThickness">Plate Thickness (mm):</label>
-                    <input type="number" id="plateThickness" value="2" min="1" max="5" step="0.5">
-                    <span class="value-display">2mm</span>
-                </div>
-
-                <div class="control-group">
-                    <label for="cornerRadius">Corner Radius (mm):</label>
-                    <input type="number" id="cornerRadius" value="5" min="0" max="20" step="1">
-                    <span class="value-display">5mm</span>
-                </div>
-
-                <h3>Mounting Holes</h3>
-
-                <div class="control-group">
-                    <label for="mountHoles">Number of Mounting Holes:</label>
-                    <select id="mountHoles">
-                        <option value="0">None</option>
-                        <option value="2">2 holes</option>
-                        <option value="4" selected>4 holes</option>
-                        <option value="6">6 holes</option>
+                <div class="tool-group">
+                    <label>Component Type</label>
+                    <select id="componentType">
+                        <option value="pot-cts-500k">CTS Pot 500K (3/8")</option>
+                        <option value="pot-cts-250k">CTS Pot 250K (3/8")</option>
+                        <option value="pot-pushpull">Push-Pull Pot (3/8")</option>
+                        <option value="pot-mini">Mini Pot (1/4")</option>
+                        <option value="toggle-3way">3-Way Toggle (3/8")</option>
+                        <option value="toggle-mini">Mini Toggle (1/4")</option>
+                        <option value="switch-5way">5-Way Switch (custom)</option>
+                        <option value="jack-mono">Switchcraft Jack Mono (3/8")</option>
+                        <option value="jack-stereo">Switchcraft Jack Stereo (3/8")</option>
+                        <option value="jack-barrel">Barrel Jack (1/2")</option>
+                        <option value="custom">Custom Hole</option>
                     </select>
                 </div>
 
-                <div class="control-group">
-                    <label for="mountHoleDiameter">Mounting Hole Diameter (mm):</label>
-                    <input type="number" id="mountHoleDiameter" value="3" min="2" max="10" step="0.5">
-                    <span class="value-display">3mm</span>
+                <div class="tool-group" id="customDiameterGroup" style="display: none;">
+                    <label>Hole Diameter (inches)</label>
+                    <input type="number" id="customDiameter" step="0.01" value="0.375" min="0.1" max="2">
                 </div>
 
-                <h3>Control Holes</h3>
-
-                <div class="control-group">
-                    <label for="potHoles">Potentiometer Holes:</label>
-                    <input type="number" id="potHoles" value="2" min="0" max="4" step="1">
-                    <span class="value-display">2</span>
-                </div>
-
-                <div class="control-group">
-                    <label for="potDiameter">Pot Hole Diameter (mm):</label>
-                    <input type="number" id="potDiameter" value="8" min="6" max="12" step="0.5">
-                    <span class="value-display">8mm</span>
-                </div>
-
-                <div class="control-group">
-                    <label for="switchHoles">Switch Holes:</label>
-                    <input type="number" id="switchHoles" value="1" min="0" max="3" step="1">
-                    <span class="value-display">1</span>
-                </div>
-
-                <div class="control-group">
-                    <label for="switchDiameter">Switch Hole Diameter (mm):</label>
-                    <input type="number" id="switchDiameter" value="6" min="4" max="12" step="0.5">
-                    <span class="value-display">6mm</span>
-                </div>
-
-                <div class="control-group">
-                    <label for="jackHole">
-                        <input type="checkbox" id="jackHole" checked>
-                        Output Jack Hole
-                    </label>
-                </div>
-
-                <div class="control-group">
-                    <label for="jackDiameter">Jack Hole Diameter (mm):</label>
-                    <input type="number" id="jackDiameter" value="10" min="6" max="15" step="0.5">
-                    <span class="value-display">10mm</span>
-                </div>
-
-                <div class="button-group">
-                    <button id="exportSVG" class="btn btn-primary">Export SVG</button>
-                    <button id="exportPDF" class="btn btn-secondary">Export PDF</button>
-                    <button id="resetDefaults" class="btn btn-secondary">Reset to Defaults</button>
+                <div class="tool-group">
+                    <label>Plate Thickness</label>
+                    <input type="number" id="plateThickness" value="3" min="1" max="10" step="0.5">
+                    <span style="font-size: 0.75rem; color: var(--text-dim);">mm</span>
                 </div>
             </div>
 
-            <div class="preview-panel">
-                <h2>Live Preview</h2>
-                <div class="canvas-container">
-                    <canvas id="previewCanvas" width="800" height="600"></canvas>
+            <!-- Center: Canvas -->
+            <div class="canvas-container">
+                <div class="zoom-controls">
+                    <button class="zoom-btn" id="zoomIn" title="Zoom In">+</button>
+                    <button class="zoom-btn" id="zoomOut" title="Zoom Out">−</button>
+                    <button class="zoom-btn" id="zoomFit" title="Fit to Screen">⊡</button>
+                    <button class="zoom-btn" id="zoom100" title="100%">1:1</button>
                 </div>
-                <div class="dimensions-info">
-                    <p>All measurements shown are in millimeters (mm)</p>
+                <canvas id="canvas" width="800" height="600"></canvas>
+                <div class="status" id="status">Ready. Upload an image to begin.</div>
+            </div>
+
+            <!-- Right Panel: Holes List & Export -->
+            <div class="panel">
+                <h2>Components (<span id="holeCount">0</span>)</h2>
+                <ul class="hole-list" id="holeList"></ul>
+
+                <div class="export-section">
+                    <h2>Export</h2>
+                    <button class="btn" id="exportSVG">Download SVG</button>
+                    <button class="btn" id="exportSTL">Download STL (3D)</button>
+                    <button class="btn" id="sendToSheet" style="background: #4ade80;">Send to Print Queue</button>
+                    <button class="btn btn-secondary" id="clearAll">Clear All</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
     <script src="script.js"></script>
 </body>
 </html>

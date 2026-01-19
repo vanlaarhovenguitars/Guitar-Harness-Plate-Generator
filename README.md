@@ -4,7 +4,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-16213e?style=for-the-badge&logo=github)](https://github.com/vanlaarhovenguitars/Guitar-Harness-Plate-Generator)
 [![License](https://img.shields.io/badge/License-MIT-f7931e?style=for-the-badge)](LICENSE)
 
-A professional web-based tool for designing custom control plates for guitar electronics harnesses. Create precision plate designs with **live preview** and export to SVG format for CNC cutting, laser engraving, or manufacturing.
+A professional photo-based tool for designing custom control plates for guitar electronics harnesses. Upload photos of guitar cavities, calibrate with a ruler, and precisely place holes for pots, switches, and jacks. Export to SVG format for CNC cutting, laser engraving, or manufacturing.
 
 ![Guitar Harness Plate Generator](https://img.shields.io/badge/Status-Production_Ready-4caf50?style=flat-square)
 
@@ -20,17 +20,25 @@ The tool features a modern dark UI with real-time preview, intuitive controls, a
 
 ## ✨ Features
 
-- **🎨 Live Preview Canvas**: See your design update in real-time as you adjust parameters
-- **📐 Precision Dimensions**: Configure plate width, height, thickness, and corner radius (in mm)
-- **🔩 Mounting Holes**: Add 0-6 mounting holes with customizable diameter and automatic positioning
-- **🎛️ Control Holes**:
-  - Potentiometer holes (0-4) for volume/tone controls
-  - Switch holes (0-3) for pickup selectors
-  - Output jack hole with adjustable size
-- **💾 Export Options**: Export your design as SVG for CNC cutting, laser engraving, or 3D printing
-- **🎯 Professional Quality**: Accurate measurements suitable for manufacturing
-- **📱 Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
-- **🌙 Dark Modern UI**: Beautiful, easy-on-the-eyes interface
+- **📸 Photo Upload**: Upload photos of guitar cavities with a ruler for accurate scaling
+- **📏 Ruler Calibration**: Click two points on your ruler to set precise pixel-to-inch scaling
+- **🎯 Click-to-Place Holes**: Precisely place holes for components by clicking on the photo
+- **🎛️ Professional Components**: Pre-configured hole sizes for:
+  - CTS Potentiometers (500K, 250K, Push-Pull)
+  - Mini Pots
+  - 3-Way & Mini Toggle Switches
+  - 5-Way Selector Switches
+  - Switchcraft Jacks (Mono, Stereo)
+  - Barrel Jacks
+  - Custom hole diameters
+- **✏️ Cutout Tracing**: Trace irregular shapes like F-holes and pickup cavities
+- **🔍 Zoom Controls**: Zoom in/out, fit to screen, or view at 100% scale
+- **🗑️ Erase Mode**: Click to remove holes or trace points
+- **💾 Export Options**:
+  - Download SVG files for CNC/laser cutting
+  - STL export (coming soon)
+  - Send to print queue with customer info
+- **🌙 Professional Dark UI**: Modern interface with orange accents
 
 ## 🚀 Quick Start
 
@@ -78,33 +86,40 @@ No installation required! Just click the link above and start designing your cus
 
 ## 📖 How to Use
 
-### Step 1: Configure Plate Dimensions
-- Set the **width** and **height** in millimeters
-- Adjust **corner radius** for rounded edges (0-20mm)
-- Set **plate thickness** for reference
+### Step 1: Upload Photo
+- Take a photo of your guitar cavity **with a ruler visible** in the frame
+- Click **"Upload Photo"** and select your image
+- The image will load onto the canvas
 
-### Step 2: Add Mounting Holes
-- Choose number of holes: **0, 2, 4, or 6**
-- Set hole diameter for your mounting screws (typically 3mm)
-- Holes are automatically positioned in corners
+### Step 2: Calibrate Ruler
+- **Click two points** on the ruler in your photo (e.g., 0" and 1")
+- Enter the **distance between those points** (in inches)
+- Click **"Set Scale"** to calibrate pixel-to-inch conversion
+- ✓ You'll see confirmation: "Ruler calibrated!"
 
-### Step 3: Add Control Holes
-- **Potentiometer holes**: For volume/tone controls (typically 8mm)
-- **Switch holes**: For pickup selectors (typically 6mm)
-- **Output jack hole**: For 1/4" jack connector (typically 10mm)
+### Step 3: Place Holes
+- Select a component type from the dropdown:
+  - CTS Pots (500K, 250K, Push-Pull) - 3/8"
+  - Toggle Switches - 3/8" or 1/4"
+  - Jacks (Mono, Stereo, Barrel)
+  - Custom holes with any diameter
+- **Click on the photo** where you want each hole
+- Holes appear with accurate size based on your ruler calibration
 
-### Step 4: Live Preview
-- Watch the preview update **automatically** as you adjust settings
-- All measurements are displayed in millimeters
-- Visual representation shows exact hole positions
+### Step 4: Trace Cutouts (Optional)
+- Switch to **"Trace Cutout"** mode
+- Click multiple points to trace irregular shapes
+- Great for F-holes, pickup cavities, or custom cutouts
 
-### Step 5: Export Your Design
-- Click **"Export SVG"** to download your design file
-- Use the SVG file for:
-  - CNC routing
-  - Laser cutting
-  - 3D printing templates
-  - Manual drilling guides
+### Step 5: Use Zoom Controls
+- **+** / **−**: Zoom in/out
+- **⊡**: Fit to screen
+- **1:1**: View at 100% scale
+
+### Step 6: Export
+- **Download SVG**: Get a scalable vector file with accurate dimensions
+- **Send to Print Queue**: Copy design data to clipboard with customer info
+- Use the SVG for CNC routing, laser cutting, or as a drilling template
 
 ## 🎯 Design Specifications
 
