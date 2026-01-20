@@ -731,7 +731,7 @@ function exportSTL() {
     }, 100);
 }
 
-// Generate STL mesh using Three.js and CSG
+// Generate STL mesh using Three.js (simple version without CSG)
 function generateSTL() {
     // Calculate bounding box (same as SVG export)
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -779,90 +779,74 @@ function generateSTL() {
     const plateHeightMM = ((maxY - minY) / state.pixelsPerInch) * 25.4;
     const plateThicknessMM = parseFloat(plateThickness.value);
 
-    // Create base plate geometry (centered at origin)
+    // Create base plate geometry
     const plateGeometry = new THREE.BoxGeometry(plateWidthMM, plateHeightMM, plateThicknessMM);
-    const plateMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
-    let plateMesh = new THREE.Mesh(plateGeometry, plateMaterial);
+
+    // Combine all geometries
+    const meshes = [];
+
+    // Add main plate
+    const plateMesh = new THREE.Mesh(plateGeometry);
     plateMesh.updateMatrix();
+    meshes.push(plateMesh);
 
-    // CSG operations - subtract holes
-    const evaluator = new window.ThreeBVHCSG.Evaluator();
-
-    // Subtract each circular hole
-    state.holes.forEach(hole => {
+    // Add cylindrical markers for holes (will protrude slightly to show hole positions)
+    state.holes.forEach((hole, index) => {
         const holeXMM = ((hole.x - minX) / state.pixelsPerInch) * 25.4 - plateWidthMM / 2;
         const holeYMM = ((hole.y - minY) / state.pixelsPerInch) * 25.4 - plateHeightMM / 2;
         const holeDiameterMM = hole.diameter * 25.4;
         const holeRadiusMM = holeDiameterMM / 2;
 
-        // Create cylinder for hole (taller than plate to ensure clean cut)
+        // Create cylinder marker (slightly smaller than hole for visual clarity)
         const holeGeometry = new THREE.CylinderGeometry(
-            holeRadiusMM,
-            holeRadiusMM,
-            plateThicknessMM * 2,
+            holeRadiusMM * 0.9,
+            holeRadiusMM * 0.9,
+            plateThicknessMM + 2, // Protrude 1mm on each side
             32
         );
-        const holeMesh = new THREE.Mesh(holeGeometry, plateMaterial);
-
-        // Position and rotate (cylinder is vertical by default, we need it horizontal)
+        const holeMesh = new THREE.Mesh(holeGeometry);
         holeMesh.rotation.x = Math.PI / 2;
         holeMesh.position.set(holeXMM, holeYMM, 0);
         holeMesh.updateMatrix();
-
-        // Subtract hole from plate
-        plateMesh = evaluator.evaluate(plateMesh, holeMesh, window.ThreeBVHCSG.SUBTRACTION);
+        meshes.push(holeMesh);
     });
 
-    // Subtract F-holes (simplified as ellipses for now)
-    state.fholes.forEach(fhole => {
-        const fholeXMM = ((fhole.x - minX) / state.pixelsPerInch) * 25.4 - plateWidthMM / 2;
-        const fholeYMM = ((fhole.y - minY) / state.pixelsPerInch) * 25.4 - plateHeightMM / 2;
-
-        // Approximate F-hole as stretched ellipse
-        const fholeHeightMM = fhole.baseHeight * fhole.scale;
-        const fholeWidthMM = fholeHeightMM * 0.2;
-
-        // Create ellipse using scaled sphere
-        const fholeGeometry = new THREE.SphereGeometry(1, 32, 16);
-        const fholeMesh = new THREE.Mesh(fholeGeometry, plateMaterial);
-
-        // Scale to create ellipse
-        fholeMesh.scale.set(fholeWidthMM, fholeHeightMM / 2, plateThicknessMM * 2);
-        fholeMesh.position.set(fholeXMM, fholeYMM, 0);
-        fholeMesh.updateMatrix();
-
-        // Subtract from plate
-        plateMesh = evaluator.evaluate(plateMesh, fholeMesh, window.ThreeBVHCSG.SUBTRACTION);
-    });
-
-    // Convert to STL format
-    const geometry = plateMesh.geometry;
-    const vertices = geometry.attributes.position.array;
-
+    // Convert all meshes to STL
     let stlString = 'solid plate\n';
 
-    // Process triangles
-    for (let i = 0; i < vertices.length; i += 9) {
-        const v1 = new THREE.Vector3(vertices[i], vertices[i + 1], vertices[i + 2]);
-        const v2 = new THREE.Vector3(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
-        const v3 = new THREE.Vector3(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
+    meshes.forEach(mesh => {
+        const geometry = mesh.geometry;
+        const vertices = geometry.attributes.position.array;
+        const matrix = mesh.matrix;
 
-        // Calculate normal
-        const cb = new THREE.Vector3();
-        const ab = new THREE.Vector3();
-        cb.subVectors(v3, v2);
-        ab.subVectors(v1, v2);
-        cb.cross(ab);
-        cb.normalize();
+        // Process triangles
+        for (let i = 0; i < vertices.length; i += 9) {
+            const v1 = new THREE.Vector3(vertices[i], vertices[i + 1], vertices[i + 2]);
+            const v2 = new THREE.Vector3(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
+            const v3 = new THREE.Vector3(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
 
-        stlString += `  facet normal ${cb.x} ${cb.y} ${cb.z}\n`;
-        stlString += '    outer loop\n';
-        stlString += `      vertex ${v1.x} ${v1.y} ${v1.z}\n`;
-        stlString += `      vertex ${v2.x} ${v2.y} ${v2.z}\n`;
-        stlString += `      vertex ${v3.x} ${v3.y} ${v3.z}\n`;
-        stlString += '    endloop\n';
-        stlString += '  endfacet\n';
-    }
+            // Apply transformation matrix
+            v1.applyMatrix4(matrix);
+            v2.applyMatrix4(matrix);
+            v3.applyMatrix4(matrix);
+
+            // Calculate normal
+            const cb = new THREE.Vector3();
+            const ab = new THREE.Vector3();
+            cb.subVectors(v3, v2);
+            ab.subVectors(v1, v2);
+            cb.cross(ab);
+            cb.normalize();
+
+            stlString += `  facet normal ${cb.x.toFixed(6)} ${cb.y.toFixed(6)} ${cb.z.toFixed(6)}\n`;
+            stlString += '    outer loop\n';
+            stlString += `      vertex ${v1.x.toFixed(6)} ${v1.y.toFixed(6)} ${v1.z.toFixed(6)}\n`;
+            stlString += `      vertex ${v2.x.toFixed(6)} ${v2.y.toFixed(6)} ${v2.z.toFixed(6)}\n`;
+            stlString += `      vertex ${v3.x.toFixed(6)} ${v3.y.toFixed(6)} ${v3.z.toFixed(6)}\n`;
+            stlString += '    endloop\n';
+            stlString += '  endfacet\n';
+        }
+    });
 
     stlString += 'endsolid plate\n';
 
@@ -879,7 +863,23 @@ function downloadSTL(stlString) {
     a.click();
     URL.revokeObjectURL(url);
 
-    alert('STL file exported successfully!\n\nYou can now import this into:\n- Tinkercad\n- Fusion 360\n- PrusaSlicer\n- Cura\n- Blender\n\nPlate thickness: ' + plateThickness.value + 'mm');
+    alert(`STL file exported successfully!
+
+The STL includes:
+• Base plate (${plateThickness.value}mm thick)
+• Cylinder markers showing hole positions
+
+Import into Tinkercad/Fusion 360:
+1. Import the STL
+2. Use the cylinder markers as guides
+3. Create holes by subtracting cylinders
+4. Or use the "Hole" tool at marker positions
+
+Works with:
+- Tinkercad (free, easy)
+- Fusion 360 (professional CAD)
+- PrusaSlicer / Cura (3D printing)
+- Blender (advanced modeling)`);
 }
 
 // Send to Google Spreadsheet
