@@ -863,23 +863,27 @@ function downloadSTL(stlString) {
     a.click();
     URL.revokeObjectURL(url);
 
-    alert(`STL file exported successfully!
+    alert(`STL file exported!
 
-The STL includes:
+⚠️ IMPORTANT: This STL has markers, not actual holes.
+
+🎯 RECOMMENDED WORKFLOW (Easiest):
+1. Export SVG instead (button above)
+2. Import SVG into Tinkercad
+3. Holes will be properly defined as cutouts
+4. Extrude the plate shape
+5. Export STL from Tinkercad
+
+📦 CURRENT STL CONTENTS:
 • Base plate (${plateThickness.value}mm thick)
 • Cylinder markers showing hole positions
 
-Import into Tinkercad/Fusion 360:
-1. Import the STL
-2. Use the cylinder markers as guides
-3. Create holes by subtracting cylinders
-4. Or use the "Hole" tool at marker positions
+If using this STL:
+• Import into Tinkercad/Fusion 360
+• Use cylinder markers as guides
+• Manually subtract holes using "Hole" tool
 
-Works with:
-- Tinkercad (free, easy)
-- Fusion 360 (professional CAD)
-- PrusaSlicer / Cura (3D printing)
-- Blender (advanced modeling)`);
+👉 For best results, use SVG → Tinkercad!`);
 }
 
 // Send to Google Spreadsheet
